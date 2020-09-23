@@ -469,6 +469,18 @@ int WINAPI WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmdline, int show)
     flags = FLAG_VERBOSE | FLAG_INTERACTIVE;
     cmdline_tooltype |= TOOLTYPE_HOST_ARG | TOOLTYPE_PORT_ARG;
 
+    /*
+     * Initialize COM.
+     */
+    hr = CoInitialize(NULL);
+    if (hr != S_OK && hr != S_FALSE) {
+        char *str = dupprintf("%s Fatal Error", appname);
+        MessageBox(NULL, "Failed to initialize COM subsystem",
+                   str, MB_OK | MB_ICONEXCLAMATION);
+        sfree(str);
+        return 1;
+    }
+
     sk_init();
 
     init_common_controls();
