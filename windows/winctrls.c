@@ -486,17 +486,30 @@ void statictext(struct ctlpos *cp, char *text, int lines, int id)
 /*
  * An owner-drawn static text control for a panel title.
  */
-void paneltitle(struct ctlpos *cp, int id)
+void paneltitle(struct ctlpos *cp, int id, char *boxtitle)
 {
     RECT r;
+
+    OSVERSIONINFO info;
+    ZeroMemory(&info, sizeof(OSVERSIONINFO));
+    info.dwOSVersionInfoSize = sizeof(OSVERSIONINFO);
+
+    LPOSVERSIONINFO lp_info = &info;
+    GetVersionEx(lp_info);
 
     r.left = GAPBETWEEN;
     r.top = cp->ypos;
     r.right = cp->width;
-    r.bottom = TITLEHEIGHT;
-    cp->ypos += r.bottom + GAPBETWEEN;
-    doctl(cp, r, "STATIC", WS_CHILD | WS_VISIBLE | SS_OWNERDRAW,
-          0, NULL, id);
+
+    if(info.dwMajorVersion > 3) {
+      r.bottom = TITLEHEIGHT;
+      cp->ypos += r.bottom + GAPBETWEEN;
+      doctl(cp, r, "STATIC", WS_CHILD | WS_VISIBLE | SS_OWNERDRAW, 0, NULL, id);
+    } else {
+      r.bottom = TITLEHEIGHT - 3;
+      cp->ypos += r.bottom + GAPBETWEEN;
+      doctl(cp, r, "STATIC", WS_CHILD | WS_VISIBLE | SS_CENTER | WS_BORDER, 0, boxtitle, id);
+    }
 }
 
 /*
@@ -1367,7 +1380,7 @@ void winctrl_layout(struct dlgparam *dp, struct winctrls *wc,
         c->data = dupstr(s->boxtitle);
         memset(c->shortcuts, NO_SHORTCUT, lenof(c->shortcuts));
         winctrl_add(wc, c);
-        paneltitle(cp, base_id);
+        paneltitle(cp, base_id, s->boxtitle);
         base_id++;
     }
 
