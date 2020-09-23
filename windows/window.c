@@ -512,18 +512,6 @@ int WINAPI WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmdline, int show)
     conf = conf_new();
 
     /*
-     * Initialize COM.
-     */
-    hr = CoInitialize(NULL);
-    if (hr != S_OK && hr != S_FALSE) {
-        char *str = dupprintf("%s Fatal Error", appname);
-        MessageBox(NULL, "Failed to initialize COM subsystem",
-                   str, MB_OK | MB_ICONEXCLAMATION);
-        sfree(str);
-        return 1;
-    }
-
-    /*
      * Process the command line.
      */
     {
