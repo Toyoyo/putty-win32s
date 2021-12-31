@@ -138,16 +138,17 @@ void ecc_weierstrass_point_free(WeierstrassPoint *wp)
     sfree(wp);
 }
 
-WeierstrassPoint *ecc_weierstrass_point_new_from_x(WeierstrassCurve *wc, mp_int *xorig, unsigned desired_y_parity)
+WeierstrassPoint *ecc_weierstrass_point_new_from_x(
+    WeierstrassCurve *wc, mp_int *xorig, unsigned desired_y_parity)
 {
     assert(wc->sc);
-    unsigned l_success;
 
     /*
      * The curve equation is y^2 = x^3 + ax + b, which is already
      * conveniently in a form where we can compute the RHS and take
      * the square root of it to get y.
      */
+    unsigned success;
 
     mp_int *x = monty_import(wc->mc, xorig);
 
@@ -164,10 +165,10 @@ WeierstrassPoint *ecc_weierstrass_point_new_from_x(WeierstrassCurve *wc, mp_int 
     mp_free(x2_plus_a);
     mp_free(x3_plus_ax);
 
-    mp_int *y = monty_modsqrt(wc->sc, rhs, &l_success);
+    mp_int *y = monty_modsqrt(wc->sc, rhs, &success);
     mp_free(rhs);
 
-    if (!l_success) {
+    if (!success) {
         /* Failure! x^3+ax+b worked out to be a number that has no
          * square root mod p. In this situation there's no point in
          * trying to be time-constant, since the protocol sequence is
@@ -485,10 +486,10 @@ static void ecc_weierstrass_normalise(WeierstrassPoint *wp)
     mp_int *zinv3 = monty_mul(wc->mc, zinv2, zinv);
     monty_mul_into(wc->mc, wp->X, wp->X, zinv2);
     monty_mul_into(wc->mc, wp->Y, wp->Y, zinv3);
+    monty_mul_into(wc->mc, wp->Z, wp->Z, zinv);
     mp_free(zinv);
     mp_free(zinv2);
     mp_free(zinv3);
-    mp_copy_into(wp->Z, monty_identity(wc->mc));
 }
 
 void ecc_weierstrass_get_affine(
@@ -758,8 +759,8 @@ static void ecc_montgomery_normalise(MontgomeryPoint *mp)
     MontgomeryCurve *mc = mp->mc;
     mp_int *zinv = monty_invert(mc->mc, mp->Z);
     monty_mul_into(mc->mc, mp->X, mp->X, zinv);
+    monty_mul_into(mc->mc, mp->Z, mp->Z, zinv);
     mp_free(zinv);
-    mp_copy_into(mp->Z, monty_identity(mc->mc));
 }
 
 MontgomeryPoint *ecc_montgomery_multiply(MontgomeryPoint *B, mp_int *n)
@@ -830,6 +831,11 @@ void ecc_montgomery_get_affine(MontgomeryPoint *mp, mp_int **x)
 
     if (x)
         *x = monty_export(mc->mc, mp->X);
+}
+
+unsigned ecc_montgomery_is_identity(MontgomeryPoint *mp)
+{
+    return mp_eq_integer(mp->Z, 0);
 }
 
 /* ----------------------------------------------------------------------
@@ -956,7 +962,7 @@ EdwardsPoint *ecc_edwards_point_new_from_y(
      * rearranges to x^2(dy^2-a) = y^2-1. So we compute
      * (y^2-1)/(dy^2-a) and take its square root.
      */
-    unsigned l_success;
+    unsigned success;
 
     mp_int *y = monty_import(ec->mc, yorig);
     mp_int *y2 = monty_mul(ec->mc, y, y);
@@ -965,7 +971,7 @@ EdwardsPoint *ecc_edwards_point_new_from_y(
     mp_int *y2m1 = monty_sub(ec->mc, y2, monty_identity(ec->mc));
     mp_int *recip_denominator = monty_invert(ec->mc, dy2ma);
     mp_int *radicand = monty_mul(ec->mc, y2m1, recip_denominator);
-    mp_int *x = monty_modsqrt(ec->sc, radicand, &l_success);
+    mp_int *x = monty_modsqrt(ec->sc, radicand, &success);
     mp_free(y2);
     mp_free(dy2);
     mp_free(dy2ma);
@@ -973,7 +979,7 @@ EdwardsPoint *ecc_edwards_point_new_from_y(
     mp_free(recip_denominator);
     mp_free(radicand);
 
-    if (!l_success) {
+    if (!success) {
         /* Failure! x^2 worked out to be a number that has no square
          * root mod p. In this situation there's no point in trying to
          * be time-constant, since the protocol sequence is going to
@@ -1082,8 +1088,8 @@ static void ecc_edwards_normalise(EdwardsPoint *ep)
     mp_int *zinv = monty_invert(ec->mc, ep->Z);
     monty_mul_into(ec->mc, ep->X, ep->X, zinv);
     monty_mul_into(ec->mc, ep->Y, ep->Y, zinv);
+    monty_mul_into(ec->mc, ep->Z, ep->Z, zinv);
     mp_free(zinv);
-    mp_copy_into(ep->Z, monty_identity(ec->mc));
     monty_mul_into(ec->mc, ep->T, ep->X, ep->Y);
 }
 

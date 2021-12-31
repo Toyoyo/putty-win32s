@@ -1,5 +1,5 @@
 # putty-win32s
-A port of putty 0.74 to Windows 3.1+Win32s.
+A port of putty 0.76 to Windows 3.1+Win32s.
 
 Maybe this may help close this bug:
 https://www.chiark.greenend.org.uk/~sgtatham/putty/wishlist/port-win32s.html
@@ -25,10 +25,11 @@ To build this, you need the following:
 * run putty.exe
 
 ## What works
-* the GUI apps, at least putty.exe and puttytel.exe
+* the GUI apps, at least putty.exe, puttytel.exe and puttygen.exe
 
 ## What doesn't work
 * Unicode. really. at all.
+* pageant.exe.
 * console applications.
   They'll load, and that's all.
   They would require an additional DOS port, probably possible, since win32s can't handle console applications.

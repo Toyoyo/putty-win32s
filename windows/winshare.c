@@ -1,7 +1,4 @@
-/*
- * Windows implementation of SSH connection-sharing IPC setup.
- */
-
+/* Win32s stub */
 #include <stdio.h>
 #include <assert.h>
 #include "noshare.c"

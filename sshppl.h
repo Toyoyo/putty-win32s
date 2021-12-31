@@ -8,6 +8,7 @@
 #define PUTTY_SSHPPL_H
 
 typedef void (*packet_handler_fn_t)(PacketProtocolLayer *ppl, PktIn *pktin);
+typedef struct PacketProtocolLayerVtable PacketProtocolLayerVtable;
 
 struct PacketProtocolLayerVtable {
     void (*free)(PacketProtocolLayer *);
@@ -115,7 +116,7 @@ PacketProtocolLayer *ssh2_transport_new(
 PacketProtocolLayer *ssh2_userauth_new(
     PacketProtocolLayer *successor_layer,
     const char *hostname, const char *fullhostname,
-    Filename *keyfile, bool show_banner, bool tryagent,
+    Filename *keyfile, bool show_banner, bool tryagent, bool notrivialauth,
     const char *default_username, bool change_username,
     bool try_ki_auth,
     bool try_gssapi_auth, bool try_gssapi_kex_auth,

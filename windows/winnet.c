@@ -16,6 +16,9 @@
 #include "putty.h"
 #include "network.h"
 #include "tree234.h"
+#include "ssh.h"
+
+#include <ws2tcpip.h>
 
 #ifndef NO_IPV6
 #ifdef __clang__
@@ -159,6 +162,8 @@ DECL_WINDOWS_FUNCTION(static, struct servent FAR *, getservbyname,
                       (const char FAR *, const char FAR *));
 DECL_WINDOWS_FUNCTION(static, unsigned long, inet_addr, (const char FAR *));
 DECL_WINDOWS_FUNCTION(static, char FAR *, inet_ntoa, (struct in_addr));
+DECL_WINDOWS_FUNCTION(static, const char FAR *, inet_ntop,
+                      (int, void FAR *, char *, size_t));
 DECL_WINDOWS_FUNCTION(static, int, connect,
                       (SOCKET, const struct sockaddr FAR *, int));
 DECL_WINDOWS_FUNCTION(static, int, bind,
@@ -219,18 +224,45 @@ static bool sk_startup(int hi, int lo)
     return true;
 }
 
-/* Actually define this function pointer, which won't have been
- * defined alongside all the others by PUTTY_DO_GLOBALS because of the
- * annoying winelib header-ordering issue. (See comment in winstuff.h.) */
-DECL_WINDOWS_FUNCTION(/* empty */, int, select,
-                      (int, fd_set FAR *, fd_set FAR *,
-                       fd_set FAR *, const struct timeval FAR *));
+DEF_WINDOWS_FUNCTION(WSAAsyncSelect);
+DEF_WINDOWS_FUNCTION(WSAEventSelect);
+DEF_WINDOWS_FUNCTION(WSAGetLastError);
+DEF_WINDOWS_FUNCTION(WSAEnumNetworkEvents);
+DEF_WINDOWS_FUNCTION(select);
 
 void sk_init(void)
 {
-    winsock_module = load_system32_dll("wsock32.dll");
+#ifndef NO_IPV6
+    winsock2_module =
+#endif
+        winsock_module = load_system32_dll("wsock32.dll");
     if (!winsock_module)
         modalfatalbox("Unable to load any WinSock library");
+
+#ifndef NO_IPV6
+    /* Check if we have getaddrinfo in Winsock */
+    if (GetProcAddress(winsock_module, "getaddrinfo") != NULL) {
+        GET_WINDOWS_FUNCTION(winsock_module, getaddrinfo);
+        GET_WINDOWS_FUNCTION(winsock_module, freeaddrinfo);
+        GET_WINDOWS_FUNCTION_NO_TYPECHECK(winsock_module, getnameinfo);
+        /* This function would fail its type-check if we did one,
+         * because the VS header file provides an inline definition
+         * which is __cdecl instead of WINAPI. */
+        GET_WINDOWS_FUNCTION_NO_TYPECHECK(winsock_module, gai_strerror);
+    } else {
+        /* Fall back to wship6.dll for Windows 2000 */
+        wship6_module = load_system32_dll("wship6.dll");
+        if (wship6_module) {
+            GET_WINDOWS_FUNCTION(wship6_module, getaddrinfo);
+            GET_WINDOWS_FUNCTION(wship6_module, freeaddrinfo);
+            /* See comment above about type check */
+            GET_WINDOWS_FUNCTION_NO_TYPECHECK(wship6_module, getnameinfo);
+            GET_WINDOWS_FUNCTION_NO_TYPECHECK(winsock_module, gai_strerror);
+        } else {
+        }
+    }
+    GET_WINDOWS_FUNCTION(winsock2_module, WSAAddressToStringA);
+#endif
 
     GET_WINDOWS_FUNCTION(winsock_module, WSAAsyncSelect);
     GET_WINDOWS_FUNCTION(winsock_module, WSAEventSelect);
@@ -244,25 +276,21 @@ void sk_init(void)
     GET_WINDOWS_FUNCTION(winsock_module, WSAStartup);
     GET_WINDOWS_FUNCTION(winsock_module, WSACleanup);
     GET_WINDOWS_FUNCTION(winsock_module, closesocket);
-#ifndef COVERITY
     GET_WINDOWS_FUNCTION(winsock_module, ntohl);
     GET_WINDOWS_FUNCTION(winsock_module, htonl);
     GET_WINDOWS_FUNCTION(winsock_module, htons);
     GET_WINDOWS_FUNCTION(winsock_module, ntohs);
     GET_WINDOWS_FUNCTION_NO_TYPECHECK(winsock_module, gethostname);
-#else
-    /* The toolchain I use for Windows Coverity builds doesn't know
-     * the type signatures of these */
-    GET_WINDOWS_FUNCTION_NO_TYPECHECK(winsock_module, ntohl);
-    GET_WINDOWS_FUNCTION_NO_TYPECHECK(winsock_module, htonl);
-    GET_WINDOWS_FUNCTION_NO_TYPECHECK(winsock_module, htons);
-    GET_WINDOWS_FUNCTION_NO_TYPECHECK(winsock_module, ntohs);
-    GET_WINDOWS_FUNCTION_NO_TYPECHECK(winsock_module, gethostname);
-#endif
     GET_WINDOWS_FUNCTION(winsock_module, gethostbyname);
     GET_WINDOWS_FUNCTION(winsock_module, getservbyname);
     GET_WINDOWS_FUNCTION(winsock_module, inet_addr);
     GET_WINDOWS_FUNCTION(winsock_module, inet_ntoa);
+    /* Older Visual Studio, and MinGW as of Ubuntu 16.04, don't know
+     * about this function at all, so can't type-check it. Also there
+     * seems to be some disagreement in the VS headers about whether
+     * the second argument is void * or const void *, so I omit the
+     * type check. */
+    GET_WINDOWS_FUNCTION_NO_TYPECHECK(winsock_module, inet_ntop);
     GET_WINDOWS_FUNCTION(winsock_module, connect);
     GET_WINDOWS_FUNCTION(winsock_module, bind);
     GET_WINDOWS_FUNCTION(winsock_module, setsockopt);
@@ -509,8 +537,7 @@ SockAddr *sk_namelookup(const char *host, char **canonicalname,
         strncpy(realhost, host, sizeof(realhost));
     }
     realhost[lenof(realhost)-1] = '\0';
-    *canonicalname = snewn(1+strlen(realhost), char);
-    strcpy(*canonicalname, realhost);
+    *canonicalname = dupstr(realhost);
     return ret;
 }
 
@@ -642,12 +669,36 @@ bool sk_hostname_is_local(const char *name)
            !strncmp(name, "127.", 4);
 }
 
+static INTERFACE_INFO local_interfaces[16];
 static int n_local_interfaces;       /* 0=not yet, -1=failed, >0=number */
 
 static bool ipv4_is_local_addr(struct in_addr addr)
 {
     if (ipv4_is_loopback(addr))
         return true;                   /* loopback addresses are local */
+    if (!n_local_interfaces) {
+        SOCKET s = p_socket(AF_INET, SOCK_DGRAM, 0);
+        DWORD retbytes;
+
+        SetHandleInformation((HANDLE)s, HANDLE_FLAG_INHERIT, 0);
+
+        if (p_WSAIoctl &&
+            p_WSAIoctl(s, SIO_GET_INTERFACE_LIST, NULL, 0,
+                       local_interfaces, sizeof(local_interfaces),
+                       &retbytes, NULL, NULL) == 0)
+            n_local_interfaces = retbytes / sizeof(INTERFACE_INFO);
+        else
+            n_local_interfaces = -1;
+    }
+    if (n_local_interfaces > 0) {
+        int i;
+        for (i = 0; i < n_local_interfaces; i++) {
+            SOCKADDR_IN *address =
+                (SOCKADDR_IN *)&local_interfaces[i].iiAddress;
+            if (address->sin_addr.s_addr == addr.s_addr)
+                return true;           /* this address is local */
+        }
+    }
     return false;                      /* this address is not local */
 }
 
@@ -766,20 +817,20 @@ static const char *sk_net_socket_error(Socket *s);
 static SocketPeerInfo *sk_net_peer_info(Socket *s);
 
 static const SocketVtable NetSocket_sockvt = {
-    sk_net_plug,
-    sk_net_close,
-    sk_net_write,
-    sk_net_write_oob,
-    sk_net_write_eof,
-    sk_net_set_frozen,
-    sk_net_socket_error,
-    sk_net_peer_info,
+    .plug = sk_net_plug,
+    .close = sk_net_close,
+    .write = sk_net_write,
+    .write_oob = sk_net_write_oob,
+    .write_eof = sk_net_write_eof,
+    .set_frozen = sk_net_set_frozen,
+    .socket_error = sk_net_socket_error,
+    .peer_info = sk_net_peer_info,
 };
 
 static Socket *sk_net_accept(accept_ctx_t ctx, Plug *plug)
 {
     DWORD err;
-    char *errstr;
+    const char *errstr;
     NetSocket *ret;
 
     /*
@@ -831,7 +882,7 @@ static DWORD try_connect(NetSocket *sock)
 #endif
     SOCKADDR_IN a;
     DWORD err;
-    char *errstr;
+    const char *errstr;
     short localport;
     int family;
 
@@ -843,7 +894,8 @@ static DWORD try_connect(NetSocket *sock)
     {
         SockAddr thisaddr = sk_extractaddr_tmp(
             sock->addr, &sock->step);
-        plug_log(sock->plug, 0, &thisaddr, sock->port, NULL, 0);
+        plug_log(sock->plug, PLUGLOG_CONNECT_TRYING,
+                 &thisaddr, sock->port, NULL, 0);
     }
 
     /*
@@ -1002,6 +1054,9 @@ static DWORD try_connect(NetSocket *sock)
          * and we should set the socket as writable.
          */
         sock->writable = true;
+        SockAddr thisaddr = sk_extractaddr_tmp(sock->addr, &sock->step);
+        plug_log(sock->plug, PLUGLOG_CONNECT_SUCCESS,
+                 &thisaddr, sock->port, NULL, 0);
     }
 
     err = 0;
@@ -1016,7 +1071,8 @@ static DWORD try_connect(NetSocket *sock)
     if (err) {
         SockAddr thisaddr = sk_extractaddr_tmp(
             sock->addr, &sock->step);
-        plug_log(sock->plug, 1, &thisaddr, sock->port, sock->error, err);
+        plug_log(sock->plug, PLUGLOG_CONNECT_FAILED,
+                 &thisaddr, sock->port, sock->error, err);
     }
     return err;
 }
@@ -1071,7 +1127,7 @@ Socket *sk_newlistener(const char *srcaddr, int port, Plug *plug,
     SOCKADDR_IN a;
 
     DWORD err;
-    char *errstr;
+    const char *errstr;
     NetSocket *ret;
     int retcode;
 
@@ -1462,7 +1518,7 @@ void select_result(WPARAM wParam, LPARAM lParam)
         if (s->addr) {
             SockAddr thisaddr = sk_extractaddr_tmp(
                 s->addr, &s->step);
-            plug_log(s->plug, 1, &thisaddr, s->port,
+            plug_log(s->plug, PLUGLOG_CONNECT_FAILED, &thisaddr, s->port,
                      winsock_error_string(err), err);
             while (err && s->addr && sk_nextaddr(s->addr, &s->step)) {
                 err = try_connect(s);
@@ -1479,12 +1535,18 @@ void select_result(WPARAM wParam, LPARAM lParam)
       case FD_CONNECT:
         s->connected = true;
         s->writable = true;
+
         /*
-         * Once a socket is connected, we can stop falling
-         * back through the candidate addresses to connect
-         * to.
+         * Once a socket is connected, we can stop falling back
+         * through the candidate addresses to connect to. But first,
+         * let the plug know we were successful.
          */
         if (s->addr) {
+            SockAddr thisaddr = sk_extractaddr_tmp(
+                s->addr, &s->step);
+            plug_log(s->plug, PLUGLOG_CONNECT_SUCCESS,
+                     &thisaddr, s->port, NULL, 0);
+
             sk_addr_free(s->addr);
             s->addr = NULL;
         }
@@ -1548,17 +1610,16 @@ void select_result(WPARAM wParam, LPARAM lParam)
             plug_receive(s->plug, 2, buf, ret);
         }
         break;
-      case FD_WRITE:
-        {
-            int bufsize_before, bufsize_after;
-            s->writable = true;
-            bufsize_before = s->sending_oob + bufchain_size(&s->output_data);
-            try_send(s);
-            bufsize_after = s->sending_oob + bufchain_size(&s->output_data);
-            if (bufsize_after < bufsize_before)
-                plug_sent(s->plug, bufsize_after);
-        }
+      case FD_WRITE: {
+        int bufsize_before, bufsize_after;
+        s->writable = true;
+        bufsize_before = s->sending_oob + bufchain_size(&s->output_data);
+        try_send(s);
+        bufsize_after = s->sending_oob + bufchain_size(&s->output_data);
+        if (bufsize_after < bufsize_before)
+            plug_sent(s->plug, bufsize_after);
         break;
+      }
       case FD_CLOSE:
         /* Signal a close on the socket. First read any outstanding data. */
         do {
@@ -1576,42 +1637,42 @@ void select_result(WPARAM wParam, LPARAM lParam)
             }
         } while (ret > 0);
         return;
-       case FD_ACCEPT:
-        {
+      case FD_ACCEPT: {
 #ifdef NO_IPV6
-            struct sockaddr_in isa;
+        struct sockaddr_in isa;
 #else
-            struct sockaddr_storage isa;
+        struct sockaddr_storage isa;
 #endif
-            int addrlen = sizeof(isa);
-            SOCKET t;  /* socket of connection */
-            accept_ctx_t actx;
+        int addrlen = sizeof(isa);
+        SOCKET t;  /* socket of connection */
+        accept_ctx_t actx;
 
-            memset(&isa, 0, sizeof(isa));
-            err = 0;
-            t = p_accept(s->s,(struct sockaddr *)&isa,&addrlen);
-            if (t == INVALID_SOCKET)
-            {
-                err = p_WSAGetLastError();
-                if (err == WSATRY_AGAIN)
-                    break;
-            }
+        memset(&isa, 0, sizeof(isa));
+        err = 0;
+        t = p_accept(s->s,(struct sockaddr *)&isa,&addrlen);
+        if (t == INVALID_SOCKET)
+        {
+          err = p_WSAGetLastError();
+          if (err == WSATRY_AGAIN)
+              break;
+        }
 
-            actx.p = (void *)t;
+        actx.p = (void *)t;
 
 #ifndef NO_IPV6
-            if (isa.ss_family == AF_INET &&
-                s->localhost_only &&
-                !ipv4_is_local_addr(((struct sockaddr_in *)&isa)->sin_addr))
+        if (isa.ss_family == AF_INET &&
+            s->localhost_only &&
+            !ipv4_is_local_addr(((struct sockaddr_in *)&isa)->sin_addr))
 #else
-            if (s->localhost_only && !ipv4_is_local_addr(isa.sin_addr))
+        if (s->localhost_only && !ipv4_is_local_addr(isa.sin_addr))
 #endif
-            {
-                p_closesocket(t);      /* dodgy WinSock let nonlocal through */
-            } else if (plug_accepting(s->plug, sk_net_accept, actx)) {
-                p_closesocket(t);      /* denied or error */
-            }
+        {
+          p_closesocket(t);      /* dodgy WinSock let nonlocal through */
+        } else if (plug_accepting(s->plug, sk_net_accept, actx)) {
+          p_closesocket(t);      /* denied or error */
         }
+        break;
+      }
     }
 }
 
@@ -1658,6 +1719,19 @@ static SocketPeerInfo *sk_net_peer_info(Socket *sock)
         pi->addr_text = dupstr(
             p_inet_ntoa(((struct sockaddr_in *)&addr)->sin_addr));
         pi->log_text = dupprintf("%s:%d", pi->addr_text, pi->port);
+
+#ifndef NO_IPV6
+    } else if (((struct sockaddr *)&addr)->sa_family == AF_INET6) {
+        pi->addressfamily = ADDRTYPE_IPV6;
+        memcpy(pi->addr_bin.ipv6,
+               &((struct sockaddr_in6 *)&addr)->sin6_addr, 16);
+        pi->port = p_ntohs(((struct sockaddr_in6 *)&addr)->sin6_port);
+        pi->addr_text = dupstr(
+            p_inet_ntop(AF_INET6, &((struct sockaddr_in6 *)&addr)->sin6_addr,
+                        buf, sizeof(buf)));
+        pi->log_text = dupprintf("[%s]:%d", pi->addr_text, pi->port);
+
+#endif
     } else {
         sfree(pi);
         return NULL;
