@@ -1,0 +1,199 @@
+.ie \n(.g .ds Aq \(aq
+.el       .ds Aq '
+.TH "psusan" "1" "2020\(hy12\(hy13" "PuTTY\ tool\ suite" "PuTTY\ tool\ suite"
+.SH "NAME"
+.PP
+\fBpsusan\fP \- pseudo-SSH for untappable, separately authenticated networks
+.SH "SYNOPSIS"
+.PP
+.nf
+\fBpsusan\fP\ [\ \fIoptions\fP\ ]
+.fi
+.SH "DESCRIPTION"
+.PP
+\fBpsusan\fP is a server program that behaves like the innermost `connection' layer of an SSH session, without the two outer security layers of encryption and authentication. It provides all the post-authentication features of an SSH connection:
+.IP "\fB\(bu\fP"
+choosing whether to run an interactive terminal session or a single specified command
+.IP "\fB\(bu\fP"
+multiple terminal sessions at once (or a mixture of those and specified commands)
+.IP "\fB\(bu\fP"
+SFTP file transfer
+.IP "\fB\(bu\fP"
+all the standard SSH port-forwarding options
+.IP "\fB\(bu\fP"
+X11 forwarding
+.IP "\fB\(bu\fP"
+SSH agent forwarding
+.PP
+The catch is that, because it lacks the outer layers of SSH, you have to run it over some kind of data channel that is already authenticated as the right user, and that is already protected to your satisfaction against eavesdropping and session hijacking. A good rule of thumb is that any channel that you were prepared to run a \fIbare\fP shell session over, you can run \fBpsusan\fP over instead, which adds all the above conveniences without changing the security properties.
+.PP
+The protocol that \fBpsusan\fP speaks is also spoken by PuTTY, Plink, PSCP, and PSFTP, if you select the protocol type `Bare ssh-connection' or the command-line option \fB-ssh-connection\fP and specify the absolute path to the appropriate Unix-domain socket in place of a hostname.
+.SH "EXAMPLES"
+.PP
+The idea of a secure, pre-authenticated data channel seems strange to people thinking about \fInetwork\fP connections. But there are lots of examples within the context of a single Unix system, and that's where \fBpsusan\fP is typically useful.
+.SS "Docker"
+.PP
+A good example is the console or standard I/O channel leading into a container or virtualisation system. Docker is a familiar example. If you want to start a Docker container and run a shell directly within it, you might say something like
+.PP
+.nf
+docker\ run\ \-i\ \-t\ \fIsome:image\fP
+.fi
+.PP
+which will allow you to run a single shell session inside the container, in the same terminal you started Docker from.
+.PP
+Suppose that you'd prefer to run \fImultiple\fP shell sessions in the same container at once (perhaps so that one of them can use debugging tools to poke at what another is doing). And perhaps inside that container you're going to run a program that you don't trust with full access to your network, but are prepared to let it make one or two specific network connections of the kind you could set up with an SSH port forwarding.
+.PP
+In that case, you could remove the \fB-t\fP option from that Docker command line (which means `allocate a terminal device'), and tell it to run \fBpsusan\fP inside the container:
+.PP
+.nf
+docker\ run\ \-i\ \fIsome:image\fP\ /\fIsome/path/to\fP/psusan
+.fi
+.PP
+(Of course, you'll need to ensure that \fBpsusan\fP is installed somewhere inside the container image.)
+.PP
+If you do that from a shell command line, you'll see a banner line looking something like this:
+.PP
+.nf
+SSHCONNECTION@putty.projects.tartarus.org\-2.0\-PSUSAN_Release_0.75
+.fi
+.PP
+which isn't particularly helpful except that it tells you that \fBpsusan\fP has started up successfully.
+.PP
+To talk to this server \fIusefully\fP, you can set up a PuTTY saved session as follows:
+.IP "\fB\(bu\fP"
+Set the protocol to `Bare ssh-connection' (the \fBpsusan\fP protocol).
+.IP "\fB\(bu\fP"
+Write \fIsomething\fP in the hostname box. It will appear in PuTTY's window title (if you run GUI PuTTY), so you might want to write something that will remind you what kind of window it is. If you have no opinion, something generic like `\fBdummy\fP' will do.
+.IP "\fB\(bu\fP"
+In the `Proxy' configuration panel, set the proxy type to `Local', and enter the above `\fBdocker run\fP' command in the `Telnet command, or local proxy command' edit box.
+.IP "\fB\(bu\fP"
+In the `SSH' configuration panel, you will very likely want to turn on connection sharing. (See below.)
+.PP
+This arranges that when PuTTY starts up, it will run the Docker command as shown above in place of making a network connection, and talk to that command using the \fBpsusan\fP SSH-like protocol.
+.PP
+The effect is that you will still get a shell session in the context of a Docker container. But this time, it's got all the SSH amenities. If you also turn on connection sharing in the `SSH' configuration panel, then the `Duplicate Session' option will get you a second shell in the \fIsame\fP Docker container (instead of a primary shell in a separate instance). You can transfer files in and out of the container while it's running using PSCP or PSFTP; you can forward network ports, X11 programs, and/or an SSH agent to the container.
+.PP
+Of course, another way to do all of this would be to run the \fIfull\fP SSH protocol over the same channel. This involves more setup: you have to invent an SSH host key for the container, accept it in the client, and deal with it being left behind in your client's host key cache when the container is discarded. And you have to set up some login details in the container: either configure a password, and type it in the client, or copy in the public half of some SSH key you already had. And all this inconvenience is \fIunnecessary\fP, because these are all precautions you need to take when the connection between two systems is going over a hostile network. In this case, it's only going over a kernel IPC channel that's guaranteed to go to the right place, so those safety precautions are redundant, and they only add awkwardness.
+.SS "User-mode Linux"
+.PP
+User-mode Linux is another container type you can talk to in the same way. Here's a small worked example.
+.PP
+The \fIeasiest\fP way to run UML is to use its `\fBhostfs\fP' file system type to give the guest kernel access to the same virtual filesystem as you have on the host. For example, a command line like this gets you a shell prompt inside a UML instance sharing your existing filesystem:
+.PP
+.nf
+linux\ mem=512M\ rootfstype=hostfs\ rootflags=/\ rw\ init=/bin/bash
+.fi
+.PP
+If you run this at a command line (assuming you have a UML kernel available on your path under the name `\fBlinux\fP'), then you should see a lot of kernel startup messages, followed by a shell prompt along the lines of
+.PP
+.nf
+root@(none):/#
+.fi
+.PP
+To convert this into a \fBpsusan\fP-based UML session, we need to adjust the command line so that instead of running \fBbash\fP it runs \fBpsusan\fP. But running \fBpsusan\fP directly isn\*(Aqt quite enough, because \fBpsusan\fP will depend on a small amount of setup, such as having \fB/proc\fP mounted. So instead, we set the init process to a shell script which will do the necessary setup and \fIthen\fP invoke \fBpsusan\fP.
+.PP
+Also, running \fBpsusan\fP directly over the UML console device is a bad idea, because then the \fBpsusan\fP binary protocol will be mixed with textual console messages. So a better plan is to redirect UML\*(Aqs console to the standard error of the \fBlinux\fP process, and map its standard input and output to a serial port. So the replacement UML command line might look something like this:
+.PP
+.nf
+linux\ mem=512M\ rootfstype=hostfs\ rootflags=/\ rw\ \e
+\ \ \ \ con=fd:2,fd:2\ ssl0=fd:0,fd:1\ init=\fI/some/path/to/uml\-psusan.sh\fP
+.fi
+.PP
+And the setup script \fBuml-psusan.sh\fP might look like this:
+.PP
+.nf
+#!/bin/bash
+\fI#\ Set\ up\ vital\ pseudo\-filesystems\fP
+mount\ \-t\ proc\ none\ /proc
+mount\ \-t\ devpts\ none\ /dev/pts
+\fI#\ Redirect\ I/O\ to\ the\ serial\ port,\ but\ stderr\ to\ the\ console\fP
+exec\ 0<>/dev/ttyS0\ 1>&0\ 2>/dev/console
+\fI#\ Set\ the\ serial\ port\ into\ raw\ mode,\ to\ run\ a\ binary\ protocol\fP
+stty\ raw\ \-echo
+\fI#\ Choose\ what\ shell\ you\ want\ to\ run\ inside\ psusan\fP
+export\ SHELL=/bin/bash
+\fI#\ And\ now\ run\ psusan\ over\ the\ serial\ port\fP
+exec\ /home/simon/src/putty/misc/psusan
+.fi
+.PP
+Now set up a PuTTY saved session as in the Docker example above, using that \fBlinux\fP command as the local proxy command, and you\*(Aqll have a PuTTY session that starts up a clean UML instance when you run it, and (if you enabled connection sharing) further instances of the same session will connect to the same instance again.
+.SS "Windows Subsystem for Linux"
+.PP
+On Windows, the default way to use WSL is to run the \fBwsl\fP program, or one of its aliases, in a Windows console, either by launching it from an existing command prompt, or by using a shortcut that opens it in a fresh console. This gives you a Linux terminal environment, but in a Windows console window.
+.PP
+If you'd prefer to interact with the same environment using PuTTY as the terminal (for example, if you prefer PuTTY's mouse shortcuts for copy and paste), you can set it up by installing \fBpsusan\fP in the Linux environment, and then setting up a PuTTY saved session that talks to it. A nice way to do this is to use the name of the WSL distribution as the `host name':
+.IP "\fB\(bu\fP"
+set the local proxy command to `\fBwsl -d %host /usr/local/bin/psusan\fP' (or wherever you installed \fBpsusan\fP in the Linux system)
+.IP "\fB\(bu\fP"
+enter the name of a particular WSL distribution in the host name box. (For example, if you installed WSL Debian in the standard way from the Windows store, this will just be `Debian'.)
+.IP "\fB\(bu\fP"
+set the protocol to `Bare ssh-connection', as usual.
+.PP
+Like all the other examples here, this also permits you to forward ports in and out of the WSL environment (e.g. expose a WSL2 network service through the hypervisor's internal NAT), forward Pageant into it, and so on.
+.SS "\fBschroot\fP"
+.PP
+Another example of a container-like environment is the alternative filesystem layout set up by \fBschroot\fP(\fI1\fP).
+.PP
+\fBschroot\fP is another program that defaults to running an interactive shell session in the terminal you launched it from. But again, you can get a \fBpsusan\fP connection into the \fBschroot\fP environment by setting up a PuTTY saved session whose local proxy command is along the lines of
+.PP
+.nf
+schroot\ \-c\ \fIchroot\-name\fP\ /\fIsome/path/to\fP/psusan
+.fi
+.PP
+Depending on how much of the chroot environment is copied from your main one, you might find this makes it easier to (for example) run X11 programs inside the chroot that open windows on your main X display, or transfer files in and out of the chroot.
+.SS "Between network namespaces"
+.PP
+If you've set up multiple network namespaces on a Linux system, with different TCP/IP configurations, then \fBpsusan\fP can be a convenient unprivileged-user gateway between them, if you run it as a non-root user in the non-default one of your namespaces, listening for connections on a Unix-domain socket.
+.PP
+If you do that, then it gives you convenient control over which of your outgoing network connections use which TCP/IP configuration: you can use PuTTY to run a shell session in the context of the other namespace if you want to run commands like \fBping\fP, or you can set up individual port forwardings or even a SOCKS server so that processes running in one namespace can send their network connections via the other one.
+.PP
+For this application, it's probably most convenient to use the \fB--listen\fP option in \fBpsusan\fP, which makes it run as a server and listen for connections on a Unix-domain socket. Then you can enter that socket name in PuTTY\*(Aqs host name configuration field (and also still select the `Bare ssh-connection' protocol option), to connect to that socket as if it were an SSH client.
+.PP
+Provided the Unix-domain socket is inside a directory that only the right user has access to, this will ensure that authentication is done implicitly by the Linux kernel.
+.SS "Between user ids, via GNU userv"
+.PP
+If you use multiple user ids on the same machine, say for purposes of privilege separation (running some less-trusted program with limited abilities to access all your stuff), then you probably have a `default' or most privileged account where you run your main login session, and sometimes need to run a shell in another account.
+.PP
+\fBpsusan\fP can be used as an access channel between the accounts, using GNU \fBuserv\fP(\fI1\fP) as the transport. In the account you want to access, write a \fBuserv\fP configuration stanza along the lines of
+.PP
+.nf
+if\ (glob\ service\ psusan\ &\ glob\ calling\-user\ \fImy\-main\-account\-name\fP)
+\ \ \ reset
+\ \ \ execute\ /\fIsome/path/to\fP/psusan
+fi
+.fi
+.PP
+This gives your main account the right to run the command
+.PP
+.nf
+userv\ \fImy\-sub\-account\-name\fP\ psusan
+.fi
+.PP
+and you can configure that command name as a PuTTY local proxy command, in the same way as most of the previous examples.
+.PP
+Of course, there are plenty of ways already to access one local account from another, such as \fBsudo\fP. One advantage of doing it this way is that you don\*(Aqt need the system administrator to intervene when you want to change the access controls (e.g. change which of your accounts have access to another): as long as you have \fIsome\fP means of getting into each account in the first place, and \fBuserv\fP is installed, you can make further configuration changes without having to bother root about it.
+.PP
+Another advantage is that it might make file transfer between the accounts easier. If you're the kind of person who keeps your home directories private, then it's awkward to copy a file from one of your accounts to another just by using the \fBcp\fP command, because there\*(Aqs nowhere convenient that you can leave it in one account where the other one can read it. But with \fBpsusan\fP over \fBuserv\fP, you don\*(Aqt need any shared piece of filesystem: you can \fBscp\fP files back and forth without any difficulty.
+.SH "OPTIONS"
+.PP
+The command-line options supported by \fBpsusan\fP are:
+.IP "\fB--listen\fP \fIunix-socket-name\fP"
+Run \fBpsusan\fP in listening mode. \fIunix-socket-name\fP is the pathname of a Unix-domain socket to listen on. You should ensure that this pathname is inside a directory whose read and exec permissions are restricted to only the user(s) you want to be able to access the environment that \fBpsusan\fP is running in.
+.RS
+.PP
+The listening socket has to be a Unix-domain socket. \fBpsusan\fP does not provide an option to run over TCP/IP, because the unauthenticated nature of the protocol would make it inherently insecure.
+.RE
+.IP "\fB--listen-once\fP"
+In listening mode, this option causes \fBpsusan\fP to listen for only one connection, and exit immediately after that connection terminates.
+.IP "\fB--sessiondir\fP \fIpathname\fP"
+This option sets the directory that shell sessions and subprocesses will start in. By default it is \fBpsusan\fP\*(Aqs own working directory, but in some situations it\*(Aqs easier to change it with a command-line option than by wrapping \fBpsusan\fP in a script that changes directory before starting it.
+.IP "\fB-v\fP, \fB--verbose\fP"
+This option causes \fBpsusan\fP to print verbose log messages on its standard error. This is probably most useful in listening mode.
+.IP "\fB\-sshlog\fP \fIlogfile\fP"
+
+.IP "\fB\-sshrawlog\fP \fIlogfile\fP"
+These options cause \fBpsusan\fP to log protocol details to a file, similarly to the logging options in PuTTY and Plink.
+.RS
+.PP
+\fB\-sshlog\fP logs decoded SSH packets and other events (those that \fB\-v\fP would print). \fB\-sshrawlog\fP additionally logs the raw wire data, including the outer packet format and the initial greetings. 
+.RE

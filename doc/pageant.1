@@ -1,0 +1,200 @@
+.ie \n(.g .ds Aq \(aq
+.el       .ds Aq '
+.TH "pageant" "1" "2015\(hy05\(hy19" "PuTTY\ tool\ suite" "PuTTY\ tool\ suite"
+.SH "NAME"
+.PP
+\fBpageant\fP - PuTTY SSH authentication agent
+.SH "SYNOPSIS"
+.PP
+.nf
+\fBpageant\fP\ (\ \fB\-X\fP\ |\ \fB\-T\fP\ |\ \fB\-\-permanent\fP\ |\ \fB\-\-debug\fP\ )\ [\ [\ \fB\-\-encrypted\fP\ ]\ \fIkey\-file\fP...\ ]
+\fBpageant\fP\ [\ [\ \-\-\fBencrypted\fP\ ]\ \fIkey\-file\fP...\ ]\ \fB\-\-exec\fP\ \fIcommand\fP\ [\ \fIargs\fP...\ ]
+\fBpageant\fP\ \fB\-a\fP\ [\ \fB\-\-encrypted\fP\ ]\ \fIkey\-file\fP...
+\fBpageant\fP\ (\ \fB\-d\fP\ |\ \fB\-r\fP\ |\ \fB\-\-public\fP\ |\ \fB\-\-public\-openssh\fP\ )\ \fIkey\-identifier\fP...
+\fBpageant\fP\ (\ \fB\-D\fP\ |\ \fB\-R\fP\ )
+\fBpageant\fP\ \fB\-l\fP\ [\ \fB\-\-fptype\fP\ \fIformat\fP\ ]
+\fBpageant\fP\ \fB\-\-askpass\fP\ \fIprompt\fP
+.fi
+.SH "DESCRIPTION"
+.PP
+\fBpageant\fP is both an SSH authentication agent, and also a tool for communicating with an already-running agent.
+.PP
+When running as an SSH agent, it listens on a Unix-domain socket for connections from client processes running under your user id. Clients can load SSH private keys into the agent, or request signatures on a given message from a key already in the agent. This permits one-touch authentication by SSH client programs, if Pageant is holding a key that the server they are connecting to will accept.
+.PP
+\fBpageant\fP can also act as a client program itself, communicating with an already-running agent to add or remove keys, list the keys, or extract their public half.
+.PP
+The agent protocol used by \fBpageant\fP is compatible with the PuTTY tools and also with other implementations such as OpenSSH\*(Aqs SSH client and \fIssh-agent(1)\fP. Some \fBpageant\fP features are implemented with protocol extensions, so will only work if \fBpageant\fP is on both ends.
+.PP
+To run \fBpageant\fP as an agent, you must provide an option to tell it what its \fIlifetime\fP should be. Typically you would probably want Pageant to last for the duration of a login session, in which case you should use either \fB-X\fP or \fB-T\fP, depending on whether your login session is GUI or purely terminal-based respectively. For example, in your X session startup script you might write
+.PP
+.nf
+\fBeval\ $(pageant\ \-X)\fP
+.fi
+.PP
+which will cause Pageant to start running, monitor the X server to notice when your session terminates (and then it will terminate too), and print on standard output some shell commands to set environment variables that client processes will need to find the running agent.
+.PP
+In a terminal-based login, you could do almost exactly the same thing but with \fB-T\fP:
+.PP
+.nf
+\fBeval\ $(pageant\ \-T)\fP
+.fi
+.PP
+This will cause Pageant to tie its lifetime to that of your controlling terminal: when you log out, and the terminal device ceases to be associated with your session, Pageant will notice that it has no controlling terminal any more, and will terminate automatically.
+.PP
+In either of these modes, you can also add one or more private keys as extra command-line arguments, e.g.
+.PP
+.nf
+\fBeval\ $(pageant\ \-T\ ~/.ssh/key.ppk)\fP
+.fi
+.PP
+in which case Pageant will immediately prompt for the keys' passphrases (if any) and start the agent with those keys already loaded in cleartext form. Passphrase prompts will use the controlling terminal if one is available, or failing that the GUI if one of those is available. (The prompt method can be overridden with the \fB--gui-prompt\fP or \fB--tty-prompt\fP options.) If neither is available, no passphrase prompting can be done.
+.PP
+Alternatively, you can start an agent with keys stored in encrypted form:
+.PP
+.nf
+\fBeval\ $(pageant\ \-T\ \-\-encrypted\ ~/.ssh/key.ppk)\fP
+.fi
+.PP
+In this case, Pageant will not prompt for a passphrase at startup; instead, it will prompt the first time a client tries to use the key. (Pageant will need access to a GUI so that it can pop up a passphrase prompt when required, unless it's running in \fB--debug\fP mode.)
+.PP
+To use Pageant to talk to an existing agent, you can add new keys using \fB-a\fP, list the current set of keys\*(Aq fingerprints and comments with \fB-l\fP, extract the full public half of any key using \fB--public\fP or \fB--public-openssh\fP, delete a specific key or all keys using \fB-d\fP or \fB-D\fP respectively, or request re-encryption of a specific key or all keys using \fB-r\fP or \fB-R\fP respectively.
+.SH "LIFETIME"
+.PP
+The following options are called \fIlifetime modes\fP. They all request Pageant to operate in agent mode; each one specifies a different method for Pageant to start up and know when to shut down.
+.IP "\fB-X\fP"
+Pageant will open a connection to your X display, and when that connection is lost, it will terminate. This gives it the same lifetime as your GUI login session, so in this mode it is suitable for running from a startup script such as \fB.xsession\fP. The actual agent will be a subprocess; the main Pageant process will terminate immediately, after printing environment-variable setting commands on standard output which should be installed in any process wanting to communicate with the agent.
+.RS
+.PP
+The usual approach would be to run
+.PP
+.nf
+\fBeval\ $(pageant\ \-X)\fP
+.fi
+.PP
+in an X session startup script. However, other possibilities exist, such as directing the standard output of `\fBpageant -X\fP' to a file which is then sourced by any new shell.
+.RE
+.IP "\fB-T\fP"
+Pageant will tie its lifetime to that of the login session running on its controlling terminal, by noticing when it ceases to have a controlling terminal (which will automatically happen as a side effect of the session leader process terminating). Like \fB-X\fP, Pageant will print environment-variable commands on standard output.
+.IP "\fB--exec\fP \fIcommand\fP"
+Pageant will run the provided command as a subprocess, preloaded with the appropriate environment variables to access the agent it starts up. When the subprocess terminates, Pageant will terminate as well.
+.RS
+.PP
+All arguments on Pageant's command line after \fB--exec\fP will be treated as part of the command to run, even if they look like other valid Pageant options or key files.
+.RE
+.IP "\fB--permanent\fP"
+Pageant will fork off a subprocess to be the agent, and print environment-variable commands on standard output, like \fB-X\fP and \fB-T\fP. However, in this case, it will make no effort to limit its lifetime in any way; it will simply run permanently, unless manually killed. The environment variable \fBSSH_AGENT_PID\fP, set by the commands printed by Pageant, permits the agent process to be found for this purpose.
+.RS
+.PP
+This option is not recommended, because any method of manually killing the agent carries the risk of the session terminating unexpectedly before it manages to happen.
+.RE
+.IP "\fB--debug\fP"
+Pageant will run in the foreground, without forking. It will print its environment variable setup commands on standard output, and then it will log all agent activity to standard output as well; any passphrase prompts will need to be answered on standard input. This is useful for debugging what Pageant itself is doing, or what another process is doing to it.
+.SH "CLIENT OPTIONS"
+.PP
+The following options tell Pageant to operate in client mode, contacting an existing agent via environment variables that it should already have set.
+.IP "\fB-a\fP \fIkey-files\fP"
+Load the specified private key file(s) and add them to the already-running agent. Unless \fB--encrypted\fP is also specified, \fBpageant\fP will decrypt them if necessary by prompting for their passphrases (with the same choice of user interfaces as in agent mode).
+.RS
+.PP
+The private key files must be in PuTTY's \fB.ppk\fP file format. 
+.RE
+.IP "\fB-l\fP"
+List the keys currently in the running agent. Each key's fingerprint and comment string will be shown. (Use the \fB-E\fP option to change the fingerprint format.)
+.RS
+.PP
+Keys that will require a passphrase on their next use are listed as `encrypted'. Keys that can be returned to this state with \fB-r\fP are listed as `re-encryptable'. 
+.RE
+.IP "\fB--public\fP \fIkey-identifiers\fP"
+Print the public half of each specified key, in the RFC 4716 standard format (multiple lines, starting with `\fB---- BEGIN SSH2 PUBLIC KEY ----\fP').
+.RS
+.PP
+Each \fIkey-identifier\fP can be any of the following:
+.IP "\fB\(bu\fP"
+The name of a file containing the key, either the whole key (again in \fB.ppk\fP format) or just its public half.
+.IP "\fB\(bu\fP"
+The key's comment string, as shown by \fBpageant -l\fP.
+.IP "\fB\(bu\fP"
+Enough of one of the key's fingerprint formats to be unique among keys currently loaded into the agent.
+.PP
+If Pageant can uniquely identify one key by interpreting the \fIkey-identifier\fP in any of these ways, it will assume that key was the one you meant. If it cannot, you will have to specify more detail.
+.PP
+If you find that your desired \fIkey-identifier\fP string can be validly interpreted as more than one of the above \fIkinds\fP of identification, you can disambiguate by prefixing it as follows:
+.IP "`\fBfile:\fP'"
+to indicate that it is a filename
+.IP "`\fBcomment:\fP'"
+to indicate that it is a comment string
+.IP "`\fBfp:\fP'"
+to indicate that it is a fingerprint; any fingerprint format will be matched
+.IP "`\fBsha256:\fP' or `\fBmd5:\fP'"
+to indicate that it is a fingerprint of a specific format
+.RE
+.IP "\fB--public-openssh\fP \fIkey-identifiers\fP, \fB-L\fP \fIkey-identifiers\fP"
+Print the public half of each specified key, in the one-line format used by OpenSSH, suitable for putting in \fB.ssh/authorized_keys\fP files.
+.IP "\fB-d\fP \fIkey-identifiers\fP"
+Delete each specified key from the agent's memory, so that the agent will no longer serve it to clients unless it is loaded in again using \fBpageant -a\fP.
+.IP "\fB-D\fP"
+Delete all keys from the agent's memory, leaving it completely empty.
+.IP "\fB-r\fP \fIkey-identifiers\fP"
+`Re-encrypt' each specified key in the agent's memory - that is, forget any cleartext version, so that the user will be prompted for a passphrase again next time the key is used. (For this to be possible, the key must previously have been added with the \fB--encrypted\fP option.)
+.RS
+.PP
+(Holding encrypted keys is a Pageant extension, so this option and \fB-R\fP are unlikely to work with other agents.) 
+.RE
+.IP "\fB-R\fP"
+`Re-encrypt' all possible keys in the agent's memory. (This may leave some keys in cleartext, if they were not previously added with the \fB--encrypted\fP option.)
+.IP "\fB--test-sign\fP \fIkey-identifier\fP"
+
+.IP "\fB--test-sign-with-flags=\fP\fIflags\fP \fIkey-identifier\fP"
+Sign arbitrary data with the given key. This mode is only likely to be useful when testing \fBpageant\fP itself.
+.RS
+.PP
+The data to sign is taken from standard input, signed by the agent with the key identified by \fIkey-identifier\fP, and the resulting signature emitted on standard output (as a binary blob in the format defined by the SSH specifications).
+.PP
+\fIflags\fP is a number representing a combination of flag bits defined by the SSH agent protocol.
+.RE
+.SH "SSH-ASKPASS REPLACEMENT"
+.IP "\fB--askpass\fP \fIprompt\fP"
+With this option, \fBpageant\fP acts as an \fIssh-askpass(1)\fP replacement, rather than performing any SSH agent functionality. This may be useful if you prefer Pageant\*(Aqs GUI prompt style, which minimises information leakage about your passphrase length in its visual feedback, compared to other \fIssh-askpass(1)\fP implementations.
+.RS
+.PP
+\fBpageant --askpass\fP implements the standard \fIssh-askpass(1)\fP interface: it can be passed a prompt to display (as a single argument) and, if successful, prints the passphrase on standard output and returns a zero exit status. Typically you would use the environment variable \fBSSH_ASKPASS\fP to tell other programs to use \fBpageant\fP in this way.
+.RE
+.SH "OPTIONS"
+.IP "\fB-v\fP"
+Verbose mode. When Pageant runs in agent mode, this option causes it to log all agent activity to its standard error. For example, you might run
+.RS
+.PP
+.nf
+\fBeval\ $(pageant\ \-X\ \-v\ 2>~/.pageant.log)\fP
+.fi
+.PP
+and expect a list of all signatures requested by agent clients to build up in that log file.
+.PP
+The log information is the same as that produced by the \fB--debug\fP lifetime option, but \fB--debug\fP sends it to standard output (since that is the main point of debugging mode) whereas \fB-v\fP in all other lifetime modes sends the same log data to standard error (being a by-product of the program\*(Aqs main purpose). Using \fB-v\fP in \fB--debug\fP mode has no effect: the log still goes to standard output.
+.RE
+.IP "\fB-s\fP, \fB-c\fP"
+Force Pageant to output its environment setup commands in the style of POSIX / Bourne shells (\fB-s\fP) or C shells (\fB-c\fP) respectively. If neither option is given, Pageant will guess based on whether the environment variable \fBSHELL\fP has a value ending in `\fBcsh\fP'.
+.IP "\fB--symlink\fP \fIfixed-path\fP"
+When operating in agent mode, as well as creating a uniquely named listening socket, \fBpageant\fP will also create (or update) a symbolic link at \fIfixed-path\fP pointing to that socket.
+.RS
+.PP
+This allows access to an agent instance by setting the \fBSSH_AUTH_SOCK\fP environment variable to \fIfixed-path\fP, rather than having to use the value invented by \fBpageant\fP when it starts. It\*(Aqs mainly expected to be useful for debugging. 
+.RE
+.IP "\fB--encrypted\fP, \fB--no-decrypt\fP"
+When adding keys to the agent (at startup or later), keep them in encrypted form until the first attempt to use them; the user will be prompted for a passphrase then. Once decrypted, a key that was added in this way can be `re-encrypted' with the \fB-r\fP or \fB-R\fP client options.
+.RS
+.PP
+The \fB--encrypted\fP option makes no difference for key files which do not have a passphrase.
+.PP
+(Storing keys in encrypted form is a Pageant extension; other agent implementations are unlikely to support it.) 
+.RE
+.IP "\fB-E\fP \fIfingerprint-type\fP, \fB--fptype\fP \fIfingerprint-type\fP"
+Specify the fingerprint format to print. Only applicable when listing fingerprints with \fB-l\fP. The available formats are \fBsha256\fP (the default) and \fBmd5\fP.
+.IP "\fB--gui-prompt\fP, \fB--tty-prompt\fP"
+Force Pageant to prompt for key passphrases with a particular method (GUI or terminal) rather than trying to guess the most appropriate method as described above. (These options are relevant whenever a key file is specified to \fBpageant\fP that needs immediate decryption, and in \fB--askpass\fP mode.)
+.IP "\fB--help\fP"
+Print a brief summary of command-line options and terminate.
+.IP "\fB--version\fP, \fB-V\fP"
+Print the version of Pageant.
+.IP "\fB--\fP"
+Cause all subsequent arguments to be treated as key file names, even if they look like options.

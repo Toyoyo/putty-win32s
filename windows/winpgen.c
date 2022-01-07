@@ -26,8 +26,6 @@
 #define DEFAULT_ECCURVE_INDEX 0
 #define DEFAULT_EDCURVE_INDEX 0
 
-HBRUSH hBrushGreen;
-
 static char *cmdline_keyfile = NULL;
 
 /*
@@ -1176,7 +1174,6 @@ static INT_PTR CALLBACK MainDlgProc(HWND hwnd, UINT msg,
     static const char entropy_msg[] =
         "Please generate some randomness by moving the mouse over the blank area.";
     struct MainDlgState *state;
-    HDC hdc;
 
     switch (msg) {
       case WM_INITDIALOG:
@@ -2012,11 +2009,21 @@ int WINAPI WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmdline, int show)
 
     save_params = ppk_save_default_parameters;
 
+    /* Openwatcom bug?
+     * fmt_version is at '100' without redefinition
+     * can someone explain?
+     * default value taken from ../sshpubk.c:1414
+     */
+    save_params.fmt_version=3;
+    save_params.argon2_flavour = Argon2id;
+    save_params.argon2_mem = 8192;
+    save_params.argon2_passes_auto = true;
+    save_params.argon2_milliseconds = 100;
+    save_params.argon2_parallelism = 1;
+
     random_setup_special();
-    hBrushGreen = CreateSolidBrush(RGB(0,205,0));
     ret = DialogBox(hinst, MAKEINTRESOURCE(201), NULL, MainDlgProc) != IDOK;
 
     cleanup_exit(ret);
-    DeleteObject(hBrushGreen);
     return ret;                        /* just in case optimiser complains */
 }
