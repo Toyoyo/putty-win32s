@@ -5280,11 +5280,8 @@ static void wintw_clip_request_paste(TermWin *tw, int clipboard)
      * message back to our main window when it terminates, and
      * that tells us it's OK to paste.
      */
-    DWORD in_threadid; /* required for Win9x */
-    HANDLE hThread = CreateThread(NULL, 0, clipboard_read_threadfunc,
-                                  wgs.term_hwnd, 0, &in_threadid);
-    if (hThread)
-        CloseHandle(hThread);          /* we don't need the thread handle */
+    // CreateThread() doesn't do anything on win32s
+    clipboard_read_threadfunc(wgs.term_hwnd);
 }
 
 /*
