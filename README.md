@@ -34,5 +34,7 @@ To build this, you need the following:
   They'll load, and that's all, win32s doesn't support console applications.
 
 As a replacement, there's an updated ssh2dos port here: https://github.com/AnttiTakala/SSH2DOS
+
 working cp2d386.exe, sftpd386.exe and ssh2d386.exe are now provided in releases.
+
 Of course, they'll require a working wattcp environment.
