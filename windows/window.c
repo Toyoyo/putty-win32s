@@ -4519,7 +4519,7 @@ static int TranslateKey(UINT message, WPARAM wParam, LPARAM lParam,
             if (r > 0) {
                     p += sprintf((char *)p, "%s", keys);
             }
-            return p - output;
+            if(key_down) return p - output;
         }
 #ifdef SHOW_TOASCII_RESULT
         if (r == 1 && !key_down) {
