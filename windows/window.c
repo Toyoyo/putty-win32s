@@ -3183,7 +3183,7 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT message,
                 if (len == -1)
                     return DefWindowProc(hwnd, message, wParam, lParam);
 
-                if (len != 0 && buf[0]) {
+                if (len != 0) {
                     /*
                      * We need not bother about stdin backlogs
                      * here, because in GUI PuTTY we can't do
@@ -3192,7 +3192,6 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT message,
                      * messages. We _have_ to buffer everything
                      * we're sent.
                      */
-                    
                     term_keyinput(term, -1, buf, len);
                     show_mouseptr(false);
                 }
