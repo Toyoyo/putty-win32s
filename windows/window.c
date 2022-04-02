@@ -3183,7 +3183,7 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT message,
                 if (len == -1)
                     return DefWindowProc(hwnd, message, wParam, lParam);
 
-                if (len != 0) {
+                if (len != 0 && buf[0]) {
                     /*
                      * We need not bother about stdin backlogs
                      * here, because in GUI PuTTY we can't do
@@ -3192,6 +3192,7 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT message,
                      * messages. We _have_ to buffer everything
                      * we're sent.
                      */
+                    
                     term_keyinput(term, -1, buf, len);
                     show_mouseptr(false);
                 }
@@ -4513,6 +4514,17 @@ static int TranslateKey(UINT message, WPARAM wParam, LPARAM lParam,
              * Win9x/NT split, but I suspect it's worse than that.
              * See wishlist item `win-dead-keys' for more horrible detail
              * and speculations. */
+
+            /* I admit, this is ugly.
+             * The basic idea is, if we're here, we're processing "standard"
+             * keys.
+             * Every other keys handled on WM_KEYUP/WM_SYSKEYUP are managed
+             * earlier in the code.
+             * Now, WHY do I keep having 0x00 sent on ALTGR keyup event?
+             */
+            if(message == WM_KEYUP) return 0;
+            if(message == WM_SYSKEYUP) return 0;
+
             int i;
             static WORD keys[3];
             r = ToAscii(wParam, scan, keystate, keys, 0);
