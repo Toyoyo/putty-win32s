@@ -36,6 +36,7 @@ To build this, you need the following:
 As a replacement, there's an updated ssh2dos port here: https://github.com/AnttiTakala/SSH2DOS
 
 Working scp2dos.exe/scp2d386.exe, sftpdos.exe/sftpd386.exe and ssh2dos.exe/ssh2d386.exe are now provided in releases.
+
 The 386 variants are using the DOS32A extender which, in my experience, works correctly under win3.1.
 
 Of course, they'll require a working wattcp environment, and either 2 NICs or something like ndis3pkt.
