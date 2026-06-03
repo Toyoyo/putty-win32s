@@ -1070,6 +1070,7 @@ int sftp_cmd_close(struct sftp_command *cmd)
     return 1;
 }
 
+#ifndef WINSFTP_BUILD
 void list_directory_from_sftp_warn_unsorted(void)
 {
     printf("Directory is too large to sort; writing file names unsorted\n");
@@ -1080,6 +1081,7 @@ void list_directory_from_sftp_print(struct fxp_name *name)
     with_stripctrl(san, name->longname)
         printf("%s\n", san);
 }
+#endif /* !WINSFTP_BUILD */
 
 /*
  * List a directory. If no arguments are given, list pwd; otherwise

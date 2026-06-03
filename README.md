@@ -26,6 +26,20 @@ Then go in the 'windows' directory and type `wmake -f Makefile.wc win32s`
 
 ## What works
 * the GUI apps, at least putty.exe, puttytel.exe and puttygen.exe
+* winsftp.exe — a dual-pane SFTP browser (see below)
+
+## winsftp — GUI SFTP client
+
+`winsftp.exe` is a GUI wrapper around psftp in the style of WS_FTP LE / Norton Commander:
+
+* **Left pane** — local filesystem browser; `[dirname]` for folders, double-click to navigate or upload
+* **Right pane** — remote SFTP directory; populated automatically via the `ls` hook, double-click to navigate or download
+* **Button row** — `< Get`, `Put >`, `Refresh`, `MkDir`, `Delete`
+* **Menu bar** — File (Connect / Exit), Transfer, View
+* **Three colour themes** (View → Theme): Classic (system colours), Blue (white on dark blue), Green on black
+* **Command log** and manual command input with history (Up/Down) and Tab completion — full psftp command set still available
+
+Path labels update automatically. The remote pane refreshes after `cd` commands. Uses only standard Win32 controls — no comctl32, safe for Win32s.
 
 ## What doesn't work
 * Unicode. really. at all.
