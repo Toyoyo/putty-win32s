@@ -695,7 +695,7 @@ WINSFTP_OBJS = &
 	sftpcommon.obj
 
 winsftp.exe: $(WINSFTP_OBJS) psftp.res
-	$(CC) -bt=nt -l=nt_win -fe=$@ $(LDFLAGS) $(WINSFTP_OBJS)
+	$(CC) -bt=nt -l=nt_win -fe=$@ $(LDFLAGS) $(WINSFTP_OBJS) comctl32.lib
 	wrc psftp.res $@
 
 # =================================================================
