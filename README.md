@@ -1,5 +1,5 @@
 # putty-win32s
-A port of putty 0.83 to Windows 3.1+Win32s.
+A port of putty 0.85 to Windows 3.1+Win32s.
 
 Maybe this may help close this bug:
 https://www.chiark.greenend.org.uk/~sgtatham/putty/wishlist/port-win32s.html
