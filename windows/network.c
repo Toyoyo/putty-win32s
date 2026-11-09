@@ -389,6 +389,12 @@ void sk_init(void)
     sktree = newtree234(cmpfortree);
 }
 
+static void closesocket_wrap(SOCKET skt)
+{
+    p_closesocket(skt);
+    done_with_socket(skt);
+}
+
 void sk_cleanup(void)
 {
     NetSocket *s;
@@ -396,7 +402,7 @@ void sk_cleanup(void)
 
     if (sktree) {
         for (i = 0; (s = index234(sktree, i)) != NULL; i++) {
-            p_closesocket(s->s);
+            closesocket_wrap(s->s);
         }
         freetree234(sktree);
         sktree = NULL;
@@ -943,7 +949,7 @@ static DWORD try_connect(NetSocket *sock)
 
     if (sock->s != INVALID_SOCKET) {
         do_select(sock->s, false);
-        p_closesocket(sock->s);
+        closesocket_wrap(sock->s);
     }
 
     {
@@ -1335,14 +1341,14 @@ static Socket *sk_newlistener_internal(
     }
 
     if (err) {
-        p_closesocket(sk);
+        closesocket_wrap(sk);
         s->error = winsock_error_string(err);
         return &s->sock;
     }
 
 
     if (p_listen(sk, SOMAXCONN) == SOCKET_ERROR) {
-        p_closesocket(sk);
+        closesocket_wrap(sk);
         s->error = winsock_error_string(p_WSAGetLastError());
         return &s->sock;
     }
@@ -1351,7 +1357,7 @@ static Socket *sk_newlistener_internal(
      * window, or an EventSelect on an event object. */
     errstr = do_select(sk, true);
     if (errstr) {
-        p_closesocket(sk);
+        closesocket_wrap(sk);
         s->error = errstr;
         return &s->sock;
     }
@@ -1420,7 +1426,7 @@ static void sk_net_close(Socket *sock)
 
     del234(sktree, s);
     do_select(s->s, false);
-    p_closesocket(s->s);
+    closesocket_wrap(s->s);
     if (s->addr)
         sk_addr_free(s->addr);
     delete_callbacks_for_context(s);
@@ -1776,9 +1782,9 @@ void select_result(WPARAM wParam, LPARAM lParam)
         if (s->localhost_only && !ipv4_is_local_addr(isa.sin_addr))
 #endif
         {
-            p_closesocket(t);      /* dodgy WinSock let nonlocal through */
+            closesocket_wrap(t);  /* dodgy WinSock let nonlocal through */
         } else if (plug_accepting(s->plug, sk_net_accept, actx)) {
-            p_closesocket(t);      /* denied or error */
+            closesocket_wrap(t);  /* denied or error */
         }
         break;
       }

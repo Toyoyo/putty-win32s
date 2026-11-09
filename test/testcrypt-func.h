@@ -213,6 +213,8 @@ FUNC(val_wpoint, ecc_weierstrass_point_new, ARG(val_wcurve, curve),
 FUNC(val_wpoint, ecc_weierstrass_point_new_from_x, ARG(val_wcurve, curve),
      ARG(val_mpint, x), ARG(uint, desired_y_parity))
 FUNC(val_wpoint, ecc_weierstrass_point_copy, ARG(val_wpoint, orig))
+FUNC(val_wpoint, ecc_weierstrass_point_change_denominator, ARG(val_wpoint, P),
+     ARG(val_mpint, z))
 FUNC(uint, ecc_weierstrass_point_valid, ARG(val_wpoint, P))
 FUNC(val_wpoint, ecc_weierstrass_add_general, ARG(val_wpoint, P),
      ARG(val_wpoint, Q))
@@ -291,7 +293,8 @@ FUNC(void, aesgcm_set_prefix_lengths,
  * all the functions that output key and signature blobs do it by
  * returning a string.
  */
-FUNC(val_key, ssh_key_new_pub, ARG(keyalg, alg), ARG(val_string_ptrlen, pub))
+FUNC(opt_val_key, ssh_key_new_pub, ARG(keyalg, alg),
+     ARG(val_string_ptrlen, pub))
 FUNC(opt_val_key, ssh_key_new_priv, ARG(keyalg, alg),
      ARG(val_string_ptrlen, pub), ARG(val_string_ptrlen, priv))
 FUNC(opt_val_key, ssh_key_new_priv_openssh, ARG(keyalg, alg),

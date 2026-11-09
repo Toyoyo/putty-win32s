@@ -252,6 +252,7 @@ OBJ_SSHCOMMON = &
 	transport2.obj &
 	verstring.obj &
 	x11fwd.obj &
+	nocompress.obj &
 	ssh_zlib.obj
 
 OBJ_SSHCLIENT = &
@@ -300,6 +301,8 @@ OBJ_PROXY = &
 	socks4.obj &
 	socks5.obj &
 	proxy_telnet.obj &
+	newmain.obj &
+	format_connection_setup_command.obj &
 	local.obj &
 	interactor.obj
 
@@ -358,6 +361,7 @@ OBJ_WINUTILS = &
 # wu_gui-timing.obj is NOT here — it calls run_timers() so it only belongs
 # in targets that have a real event loop (putty, puttytel, pageant).
 OBJ_WINUTILS_GUIONLY = &
+	wu_blink_time.obj &
 	wu_message_box.obj &
 	wu_pgp_fingerprints_msgbox.obj &
 	wu_shinydialogbox.obj
@@ -372,7 +376,8 @@ OBJ_WINNET = &
 	handle-socket.obj &
 	named-pipe-client.obj &
 	named-pipe-server.obj &
-	local-proxy.obj
+	local-proxy.obj &
+	wu_subprocess_waiter.obj
 
 # =================================================================
 # OBJ_WINEVENTLOOP — windows event loop
@@ -889,6 +894,8 @@ encode_wide_string_as_utf8.obj: ../utils/encode_wide_string_as_utf8.c
 	$(CC) $(COMPAT) $(CFLAGS) $(XFLAGS) -fo=$@ -c $<
 fgetline.obj: ../utils/fgetline.c
 	$(CC) $(COMPAT) $(CFLAGS) $(XFLAGS) -fo=$@ -c $<
+format_connection_setup_command.obj: ../utils/format_connection_setup_command.c
+	$(CC) $(COMPAT) $(CFLAGS) $(XFLAGS) -fo=$@ -c $<
 host_ca_new_free.obj: ../utils/host_ca_new_free.c
 	$(CC) $(COMPAT) $(CFLAGS) $(XFLAGS) -fo=$@ -c $<
 host_strchr.obj: ../utils/host_strchr.c
@@ -1187,6 +1194,8 @@ verstring.obj: ../ssh/verstring.c
 	$(CC) $(COMPAT) $(CFLAGS) $(XFLAGS) -fo=$@ -c $<
 x11fwd.obj: ../ssh/x11fwd.c
 	$(CC) $(COMPAT) $(CFLAGS) $(XFLAGS) -fo=$@ -c $<
+nocompress.obj: ../ssh/nocompress.c
+	$(CC) $(COMPAT) $(CFLAGS) $(XFLAGS) -fo=$@ -c $<
 ssh_zlib.obj: ../ssh/zlib.c
 	$(CC) $(COMPAT) $(CFLAGS) $(XFLAGS) -fo=$@ -c $<
 ssh_sftp.obj: ../ssh/sftp.c
@@ -1241,6 +1250,8 @@ socks4.obj: ../proxy/socks4.c
 socks5.obj: ../proxy/socks5.c
 	$(CC) $(COMPAT) $(CFLAGS) $(XFLAGS) -fo=$@ -c $<
 proxy_telnet.obj: ../proxy/telnet.c
+	$(CC) $(COMPAT) $(CFLAGS) $(XFLAGS) -fo=$@ -c $<
+newmain.obj: ../proxy/newmain.c
 	$(CC) $(COMPAT) $(CFLAGS) $(XFLAGS) -fo=$@ -c $<
 local.obj: ../proxy/local.c
 	$(CC) $(COMPAT) $(CFLAGS) $(XFLAGS) -fo=$@ -c $<
@@ -1469,6 +1480,10 @@ wu_version.obj: utils/version.c
 wu_win_strerror.obj: utils/win_strerror.c
 	$(CC) $(COMPAT) $(CFLAGS) $(XFLAGS) -fo=$@ -c $<
 wu_wmemchr.obj: utils/wmemchr.c
+	$(CC) $(COMPAT) $(CFLAGS) $(XFLAGS) -fo=$@ -c $<
+wu_subprocess_waiter.obj: utils/subprocess_waiter.c
+	$(CC) $(COMPAT) $(CFLAGS) $(XFLAGS) -fo=$@ -c $<
+wu_blink_time.obj: utils/blink_time.c
 	$(CC) $(COMPAT) $(CFLAGS) $(XFLAGS) -fo=$@ -c $<
 
 # end of Makefile.wc

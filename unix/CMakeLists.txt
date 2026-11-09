@@ -19,6 +19,7 @@ add_sources_from_current_dir(utils
   utils/pgp_fingerprints.c
   utils/pollwrap.c
   utils/signal.c
+  utils/subprocess_waiter.c
   utils/x11_ignore_error.c
   # We want the ISO C implementation of ltime(), because we don't have
   # a local better alternative
@@ -26,10 +27,14 @@ add_sources_from_current_dir(utils
 # Compiled icon pixmap files
 add_library(puttyxpms STATIC
   putty-xpm.c
-  putty-config-xpm.c)
+  putty-rgb.c
+  putty-config-xpm.c
+  putty-config-rgb.c)
 add_library(ptermxpms STATIC
   pterm-xpm.c
-  pterm-config-xpm.c)
+  pterm-rgb.c
+  pterm-config-xpm.c
+  pterm-config-rgb.c)
 add_sources_from_current_dir(eventloop
   cliloop.c uxsel.c)
 add_sources_from_current_dir(console
@@ -108,6 +113,7 @@ if(HAVE_ALIGNED_ALLOC)
   target_compile_definitions(overaligned_alloc PRIVATE ALLOCATION_ALIGNMENT=128)
   add_executable(testsc
     ${CMAKE_SOURCE_DIR}/test/testsc.c
+    ${CMAKE_SOURCE_DIR}/test/test_random.c
     $<TARGET_OBJECTS:overaligned_alloc>)
   target_link_libraries(testsc keygen crypto utils)
 endif()
@@ -153,7 +159,7 @@ if(GTK_FOUND)
   be_list(pterm pterm)
   target_link_libraries(pterm
     guiterminal eventloop settings utils ptermxpms
-    ${GTK_LIBRARIES} ${X11_LIBRARIES})
+    ${GTK_LIBRARIES} ${X11_LIBRARIES} ${X11_Xrender_LIB})
   installed_program(pterm)
 
   if(GTK_VERSION GREATER_EQUAL 3)
@@ -170,7 +176,7 @@ if(GTK_FOUND)
     be_list(ptermapp pterm)
     target_link_libraries(ptermapp
       guiterminal eventloop settings utils ptermxpms
-      ${GTK_LIBRARIES} ${X11_LIBRARIES})
+      ${GTK_LIBRARIES} ${X11_LIBRARIES} ${X11_Xrender_LIB})
   endif()
 
   add_executable(putty
@@ -181,7 +187,7 @@ if(GTK_FOUND)
   target_link_libraries(putty
     guiterminal eventloop sshclient otherbackends settings
     network crypto utils puttyxpms
-    ${GTK_LIBRARIES} ${X11_LIBRARIES})
+    ${GTK_LIBRARIES} ${X11_LIBRARIES} ${X11_Xrender_LIB})
   set_target_properties(putty
     PROPERTIES LINK_INTERFACE_MULTIPLICITY 2)
   installed_program(putty)
@@ -196,7 +202,7 @@ if(GTK_FOUND)
     target_link_libraries(puttyapp
       guiterminal eventloop sshclient otherbackends settings
       network crypto utils puttyxpms
-      ${GTK_LIBRARIES} ${X11_LIBRARIES})
+      ${GTK_LIBRARIES} ${X11_LIBRARIES} ${X11_Xrender_LIB})
   endif()
 
   add_executable(puttytel
@@ -213,7 +219,7 @@ if(GTK_FOUND)
   target_link_libraries(puttytel
     guiterminal eventloop otherbackends settings network utils
     puttyxpms
-    ${GTK_LIBRARIES} ${X11_LIBRARIES})
+    ${GTK_LIBRARIES} ${X11_LIBRARIES} ${X11_Xrender_LIB})
 
   add_executable(test_lineedit
     ${CMAKE_SOURCE_DIR}/test/test_lineedit.c

@@ -39,43 +39,6 @@ const static ptrlen kex_strict_s =
  * attack */
 static const char terrapin_weakness[1];
 
-static ssh_compressor *ssh_comp_none_init(void)
-{
-    return NULL;
-}
-static void ssh_comp_none_cleanup(ssh_compressor *handle)
-{
-}
-static ssh_decompressor *ssh_decomp_none_init(void)
-{
-    return NULL;
-}
-static void ssh_decomp_none_cleanup(ssh_decompressor *handle)
-{
-}
-static void ssh_comp_none_block(ssh_compressor *handle,
-                                const unsigned char *block, int len,
-                                unsigned char **outblock, int *outlen,
-                                int minlen)
-{
-}
-static bool ssh_decomp_none_block(ssh_decompressor *handle,
-                                  const unsigned char *block, int len,
-                                  unsigned char **outblock, int *outlen)
-{
-    return false;
-}
-static const ssh_compression_alg ssh_comp_none = {
-    .name = "none",
-    .delayed_name = NULL,
-    .compress_new = ssh_comp_none_init,
-    .compress_free = ssh_comp_none_cleanup,
-    .compress = ssh_comp_none_block,
-    .decompress_new = ssh_decomp_none_init,
-    .decompress_free = ssh_decomp_none_cleanup,
-    .decompress = ssh_decomp_none_block,
-    .text_name = NULL,
-};
 const static ssh_compression_alg *const compressions[] = {
     &ssh_zlib, &ssh_comp_none
 };
@@ -251,10 +214,8 @@ static void ssh2_transport_free(PacketProtocolLayer *ppl)
     if (s->kex_shared_secret) strbuf_free(s->kex_shared_secret);
     if (s->dh_ctx)
         dh_cleanup(s->dh_ctx);
-    if (s->rsa_kex_key_needs_freeing) {
+    if (s->rsa_kex_key_needs_freeing)
         ssh_rsakex_freekey(s->rsa_kex_key);
-        sfree(s->rsa_kex_key);
-    }
     if (s->ecdh_key)
         ecdh_key_free(s->ecdh_key);
     if (s->exhash)
